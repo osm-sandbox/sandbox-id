@@ -4,8 +4,8 @@
   "description": "iD fork compatible with the OSM Sandbox",
   "main": "dist/iD.min.js",
   "repository": "github:osm-sandbox/sandbox-id",
-  "homepage": "https://github.com/publicdomainmap/publicdomainmap",
-  "bugs": "https://github.com/publicdomainmap/publicdomainmap/issues",
+  "homepage": "https://github.com/osm-sandbox/sandbox-iD",
+  "bugs": "https://github.com/osm-sandbox/sandbox-iD/issues",
   "keywords": [
     "editor",
     "openstreetmap"
