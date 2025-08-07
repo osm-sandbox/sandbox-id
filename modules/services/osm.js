@@ -8,7 +8,7 @@ import RBush from 'rbush';
 import { JXON } from '../util/jxon';
 import { geoExtent, geoRawMercator, geoVecAdd, geoZoomToScale } from '../geo';
 import { osmEntity, osmNode, osmNote, osmRelation, osmWay } from '../osm';
-import { utilArrayChunk, utilArrayGroupBy, utilArrayUniq, utilObjectOmit, utilRebind, utilTiler, utilQsString, utilStringQs } from '../util';
+import { utilArrayChunk, utilArrayGroupBy, utilArrayUniq, utilObjectOmit, utilRebind, utilTiler, utilQsString } from '../util';
 import { localizer } from '../core/localizer.js';
 
 import { osmApiConnections } from '../../config/id.js';
@@ -17,17 +17,15 @@ import { osmApiConnections } from '../../config/id.js';
 var tiler = utilTiler();
 var dispatch = d3_dispatch('apiStatusChange', 'authLoading', 'authDone', 'change', 'loading', 'loaded', 'loadedNotes');
 
-// These options are only for the initial load. Any changes need to be reflected in the `switch` function as well
 var urlroot = osmApiConnections[0].url;
 var apiUrlroot = osmApiConnections[0].apiUrl || urlroot;
-var redirectPath = osmApiConnections[0].redirect_uri_base || (window.location.origin + window.location.pathname);
-
+var redirectPath = window.location.origin + window.location.pathname;
 var oauth = osmAuth({
     url: urlroot,
     apiUrl: apiUrlroot,
     client_id: osmApiConnections[0].client_id,
     scope: 'read_prefs write_prefs write_api read_gpx write_notes',
-    redirect_uri: redirectPath + 'land2.html',
+    redirect_uri: redirectPath + 'land.html',
     loading: authLoading,
     done: authDone
 });
@@ -1334,12 +1332,10 @@ export default {
     switch: function(newOptions) {
         urlroot = newOptions.url;
         apiUrlroot = newOptions.apiUrl || urlroot;
-        redirectPath = newOptions.redirect_uri_base || (window.location.origin + window.location.pathname);
         if (newOptions.url && !newOptions.apiUrl) {
             newOptions = {
                 ...newOptions,
-                apiUrl: newOptions.url,
-                redirect_uri: redirectPath + 'land2.html'
+                apiUrl: newOptions.url
             };
         }
 
@@ -1457,94 +1453,13 @@ export default {
             that.userChangesets(function() {});  // eagerly load user details/changesets
         }
 
-        sandboxAuthenticate(done, options);
+        // ensure the locale is correctly set before opening the popup
+        oauth.options({
+            ...oauth.options(),
+            locale: localizer.localeCode(),
+        });
 
-        function sandboxAuthenticate(callback, options) {
-        
-            _preopenPopup(function(error, popup) {
-              if (error) {
-                callback(error);
-              } else {
-                let matches = /https:\/\/api\.(.+)\.boxes\.osmsandbox\.us/gi.exec(apiUrlroot);
-                let box = matches && matches.length > 1 && matches[1];
-                var queryString = new URLSearchParams({ "box": box, "end_redirect_uri": redirectPath + 'land.html' }).toString();
-                fetch(`https://dashboard.osmsandbox.us/initialize_session?${queryString}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        var sessionId = data.id;
-                        _authenticate(sessionId, popup, callback, options);
-                    })
-                    .catch(error => {
-                        console.error('Error initializing session:', error);
-                    });
-              }
-            });
-        };
-
-        /**
-         * opens an empty popup to be later used for the authentication page
-         * @param   {function}  callback  Errback-style callback `(err, result)`, called when complete
-         * @return  none
-         */
-        function _preopenPopup(callback) {
-
-            // Create a 550x610 popup window in the center of the screen
-            var w = 550;
-            var h = 610;
-            var settings = [
-                ['width', w],
-                ['height', h],
-                ['left', window.screen.width / 2 - w / 2],
-                ['top', window.screen.height / 2 - h / 2],
-            ]
-            .map(function (x) { return x.join('='); })
-            .join(',');
-            var popup = window.open('about:blank', 'oauth_window', settings);
-            if (popup) {
-                callback(null, popup);
-            } else {
-                var error = new Error('Popup was blocked');
-                error.status = 'popup-blocked';
-                callback(error);
-            }
-        }
-
-        /**
-         * _authenticate
-         * internal authenticate
-         *
-         * @param  {String}    sessionId     
-         * @param  {Window}    popup     Popup Window to use for the authentication page, should be undefined when using singlepage mode
-         * @param  {function}  callback  Errback-style callback that accepts `(err, result)`
-         */
-        function _authenticate(sessionId, popup, callback, options) {
-
-            var queryString = new URLSearchParams({ "session_id": sessionId }).toString();
-            var url = `https://dashboard.osmsandbox.us/osm_authorization?${queryString}`;
-
-            oauth.popupWindow = popup;
-            popup.location = url;
-
-            // Called by a function in the redirect URL page, in the popup window. The
-            // window closes itself.
-            window.authComplete = function (url) {
-                delete window.authComplete;
-
-                // we need to log the user into the sandbox and then run sandbox authentication 
-                const urlParams = utilStringQs(url.substring(url.indexOf('?')));
-                popup.location = oauth.options().url + '/login?user=' + urlParams.user;
-
-                // ensure the locale is correctly set before opening the popup
-                oauth.options({
-                    ...oauth.options(),
-                    locale: localizer.localeCode(),
-                });
-
-                setTimeout(function() {
-                    oauth.authenticate(callback, options);
-                }, 3000); //TODO: don't use a timeout
-            };
-        }
+        oauth.authenticate(done, options);
     },
 
 
